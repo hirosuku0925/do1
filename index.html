@@ -1,0 +1,99 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>リアルタイム犬翻訳機</title>
+    <style>
+        body { font-family: sans-serif; text-align: center; background: #fdf5e6; padding: 50px; }
+        .box { background: white; border-radius: 20px; padding: 30px; box-shadow: 0 4px 15px rgba(0,0,0,0.1); display: inline-block; width: 80%; max-width: 400px; }
+        h1 { color: #d35400; }
+        #status { font-size: 0.9em; color: #7f8c8d; margin-bottom: 20px; }
+        #message { font-size: 1.5em; font-weight: bold; color: #2c3e50; min-height: 2em; margin: 20px 0; }
+        .visualizer { width: 100%; height: 20px; background: #eee; border-radius: 10px; overflow: hidden; }
+        #bar { height: 100%; width: 0%; background: #27ae60; transition: width 0.1s; }
+        button { background: #d35400; color: white; border: none; padding: 15px 30px; border-radius: 30px; font-size: 1em; cursor: pointer; transition: 0.3s; }
+        button:hover { background: #e67e22; }
+    </style>
+</head>
+<body>
+
+<div class="box">
+    <h1>🐶 犬翻訳機</h1>
+    <p id="status">マイクを許可して「開始」を押してね</p>
+    
+    <div class="visualizer">
+        <div id="bar"></div>
+    </div>
+
+    <div id="message">聞き取り中...</div>
+    
+    <button id="start-btn">翻訳を開始する</button>
+</div>
+
+<script>
+let audioContext;
+let analyser;
+let microphone;
+let javascriptNode;
+
+const phrases = ["お腹すいたワン！", "散歩に行きたい！", "誰か来た！？", "遊ぼうよ！", "大好きだワン！", "それ何？気になる！"];
+const messageEl = document.getElementById('message');
+const barEl = document.getElementById('bar');
+const statusEl = document.getElementById('status');
+
+document.getElementById('start-btn').addEventListener('click', async () => {
+    try {
+        // マイクの許可を得る
+        const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+        audioContext = new AudioContext();
+        analyser = audioContext.createAnalyser();
+        microphone = audioContext.createMediaStreamSource(stream);
+        javascriptNode = audioContext.createScriptProcessor(2048, 1, 1);
+
+        analyser.smoothingTimeConstant = 0.8;
+        analyser.fftSize = 1024;
+
+        microphone.connect(analyser);
+        analyser.connect(javascriptNode);
+        javascriptNode.connect(audioContext.destination);
+
+        statusEl.innerText = "聴取中：犬が吠えると翻訳します";
+        document.getElementById('start-btn').style.display = 'none';
+
+        let isCooldown = false;
+
+        javascriptNode.onaudioprocess = () => {
+            const array = new Uint8Array(analyser.frequencyBinCount);
+            analyser.getByteFrequencyData(array);
+            let values = 0;
+
+            for (let i = 0; i < array.length; i++) {
+                values += array[i];
+            }
+
+            const average = values / array.length;
+            barEl.style.width = average + "%";
+
+            // 音量が一定（40）を超えたら「吠えた」とみなす
+            if (average > 40 && !isCooldown) {
+                const randomMsg = phrases[Math.floor(Math.random() * phrases.length)];
+                messageEl.innerText = randomMsg;
+                messageEl.style.color = "#e74c3c";
+                
+                // 連続反応を防ぐためのクールダウン（3秒）
+                isCooldown = true;
+                setTimeout(() => {
+                    isCooldown = false;
+                    messageEl.style.color = "#2c3e50";
+                }, 3000);
+            }
+        };
+    } catch (err) {
+        statusEl.innerText = "マイクが使えません。設定を確認してね。";
+    }
+});
+</script>
+
+</body>
+</html>
